@@ -1,0 +1,60 @@
+# Test for edge cases and complex scenarios
+
+# Test 1: Empty slice boundaries
+x = pattern fibonacci 10
+first = x[:3]
+last = x[7:]
+print first
+print last
+
+# Test 2: Single element operations
+single = 42
+result = single + 10
+print result
+
+# Test 3: Chained arithmetic
+nums = pattern square 5
+step1 = nums * 2
+step2 = step1 + 5
+step3 = step2 - 3
+print step3
+
+# Test 4: Complex nested structures
+for i in pattern fibonacci 5 {
+    if i > 0 {
+        doubled = i * 2
+        if doubled > 3 {
+            print doubled
+        }
+    }
+}
+
+# Test 5: Multiple slices from same array
+data = pattern arithmetic 0, 5, 12
+part1 = data[:4]
+part2 = data[4:8]
+part3 = data[8:]
+print part1
+print part2
+print part3
+
+# Test 6: Operations on slices
+full = pattern cube 10
+slice_a = full[1:5]
+slice_b = full[5:9]
+combined = slice_a + slice_b
+print combined
+
+# Test 7: Comparison in expression
+val1 = 10
+val2 = 20
+if val1 + 5 < val2 {
+    print val1
+}
+
+# Test 8: For loop over slice
+original = pattern triangular 10
+subset = original[2:7]
+for element in subset {
+    print element
+}

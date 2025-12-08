@@ -1,0 +1,45 @@
+# Test file for if/else conditionals
+# Tests basic conditions, nested conditions, and conditions with expressions
+
+# Test basic if
+x = 5
+if x > 3 {
+    print x
+}
+
+# Test if/else
+y = 10
+if y > 15 {
+    print y
+} else {
+    print y * 2
+}
+
+# Test with comparisons
+a = 7
+b = 4
+if a > b {
+    print a
+} else {
+    print b
+}
+
+# Test nested if/else
+score = 85
+if score >= 90 {
+    print 90
+} else {
+    if score >= 80 {
+        print 80
+    } else {
+        print 70
+    }
+}
+
+# Test with arrays
+fib = pattern fibonacci 8
+for val in fib {
+    if val > 5 {
+        print val
+    }
+}

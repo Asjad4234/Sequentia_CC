@@ -1,0 +1,64 @@
+# Comprehensive test combining all new features
+# Vector arithmetic, slicing, if/else, and for loops
+
+# Generate base data
+fib = pattern fibonacci 10
+print fib
+
+# Vector arithmetic: double the sequence
+doubled = fib * 2
+print doubled
+
+# Slicing: extract middle section
+middle = doubled[2:7]
+print middle
+
+# For loop with conditional
+for val in middle {
+    if val > 5 {
+        print val
+    }
+}
+
+# More complex: combine patterns
+squares = pattern square 8
+cubes = pattern cube 8
+
+# Vector operations
+combined = squares + cubes
+print combined
+
+# Slice and process
+chunk = combined[2:6]
+scaled = chunk * 3
+print scaled
+
+# Nested loops with conditions
+x = pattern fibonacci 6
+y = pattern square 5
+
+for a in x {
+    if a > 0 {
+        for b in y {
+            if b < 20 {
+                result = a + b
+                print result
+            }
+        }
+    }
+}
+
+# Complex arithmetic expression
+seq1 = pattern arithmetic 0, 5, 8
+seq2 = pattern geometric 1, 2, 8
+
+combined2 = seq1 + seq2 * 2
+print combined2
+
+# Process the result with slicing
+part = combined2[1:5]
+for element in part {
+    if element > 10 {
+        print element
+    }
+}

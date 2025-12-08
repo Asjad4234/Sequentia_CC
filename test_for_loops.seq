@@ -1,0 +1,33 @@
+# Test file for for loops
+# Tests basic loops, nested loops, and loops with conditions
+
+# Basic for loop
+fib = pattern fibonacci 8
+for num in fib {
+    print num
+}
+
+# For loop with condition
+squares = pattern square 10
+for val in squares {
+    if val > 25 {
+        print val
+    }
+}
+
+# Nested for loops
+x = pattern fibonacci 5
+y = pattern square 3
+for a in x {
+    for b in y {
+        sum = a + b
+        print sum
+    }
+}
+
+# For loop with arithmetic inside
+nums = pattern arithmetic 1, 2, 6
+for n in nums {
+    doubled = n * 2
+    print doubled
+}

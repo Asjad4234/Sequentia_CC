@@ -1,0 +1,27 @@
+# Test file for slicing operations
+# Tests various slice patterns
+
+# Generate test data
+nums = pattern fibonacci 10
+print nums
+
+# Basic slicing
+middle = nums[2:5]
+print middle
+
+first_five = nums[:5]
+print first_five
+
+last_five = nums[5:]
+print last_five
+
+# Use slices in operations
+doubled_middle = nums[2:7] * 2
+print doubled_middle
+
+# Combine slicing with arithmetic
+x = pattern square 8
+slice1 = x[1:4]
+slice2 = x[4:7]
+combined = slice1 + slice2
+print combined

@@ -1,0 +1,21 @@
+# Sequentia Demo: All Features Showcase
+# Demonstrates vector arithmetic, slicing, conditionals, and loops
+
+# 1. Generate Fibonacci sequence
+fib = pattern fibonacci 10
+print fib
+
+# 2. Vector Arithmetic: Scalar Broadcast
+doubled = fib * 2
+print doubled
+
+# 3. Slicing: Extract middle portion
+middle = fib[2:5]
+print middle
+
+# 4. For Loop & Conditional
+for val in middle {
+    if val > 4 {
+        print val
+    }
+}

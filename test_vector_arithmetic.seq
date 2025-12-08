@@ -1,0 +1,31 @@
+# Test file for vector arithmetic operations
+# Tests scalar broadcast, element-wise operations, and combinations
+
+# Generate base sequences
+fib = pattern fibonacci 6
+print fib
+
+# Test scalar broadcasting
+doubled = fib * 2
+print doubled
+
+tripled = fib * 3
+print tripled
+
+shifted = fib + 10
+print shifted
+
+# Test element-wise operations
+squares = pattern square 6
+sum = fib + squares
+print sum
+
+diff = squares - fib
+print diff
+
+prod = fib * squares
+print prod
+
+# Test complex expressions
+complex = fib * 2 + squares - 5
+print complex

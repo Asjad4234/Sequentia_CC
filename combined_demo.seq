@@ -1,0 +1,26 @@
+# Combined Demo - Arithmetic and Geometric patterns together
+
+# Arithmetic: Start at 1, add 2 each time (odd numbers)
+odds = pattern arithmetic 1, 2, 8
+print odds
+
+# Geometric: Powers of 2
+powers = pattern geometric 1, 2, 8
+print powers
+
+# Print specific elements
+print odds[0]
+print odds[7]
+print powers[5]
+
+# Using variables for flexibility
+count = 5
+arith = pattern arithmetic 10, 5, count
+geo = pattern geometric 3, 2, count
+print arith
+print geo
+
+# Index with variable
+idx = 3
+print arith[idx]
+print geo[idx]

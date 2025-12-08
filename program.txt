@@ -1,0 +1,15 @@
+# Array element access
+x = pattern square 5
+y = x[2]        # y = 9 (third element)
+print y         # Output: 9
+
+# Array copy
+x = pattern fibonacci 6
+y = x
+print y         # Output: 0 1 1 2 3 5
+
+# With variables
+n = 3
+arr = pattern cube 10
+elem = arr[n]
+print elem      # Output: 64

@@ -1,0 +1,21 @@
+# Arithmetic Pattern Demo
+# Syntax: variable = pattern arithmetic start, step, count
+
+# Example 1: Simple arithmetic sequence starting at 5, step 3
+seq1 = pattern arithmetic 5, 3, 6
+print seq1
+
+# Example 2: Even numbers (start at 0, step 2)
+evens = pattern arithmetic 0, 2, 10
+print evens
+
+# Example 3: Counting by 10s
+tens = pattern arithmetic 10, 10, 5
+print tens
+
+# Example 4: Using variables
+n = 7
+start_val = 100
+step_val = 15
+custom = pattern arithmetic start_val, step_val, n
+print custom[2]

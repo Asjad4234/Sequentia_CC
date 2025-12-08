@@ -1,0 +1,13 @@
+# Complex nested pattern usage
+n = 3
+x = pattern fibonacci 10
+count = x[n]
+y = pattern square count
+print x
+print y
+
+# Arithmetic with array element
+arr = pattern triangular 8
+result = pattern arithmetic 5, 2, arr[4]
+print arr
+print result

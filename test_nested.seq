@@ -1,0 +1,2 @@
+x = pattern geometric 2, 4, 10
+print x

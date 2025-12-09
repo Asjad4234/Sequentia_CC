@@ -674,277 +674,376 @@ class SemanticAnalyzer:
 
 
 # --------------------------
-# Code Generation
+# Machine Code Generation
 # --------------------------
 
-def py_expr(expr, gen_inline=False):
-    if isinstance(expr, NumberExpr): 
-        return str(expr.value)
-    if isinstance(expr, IDExpr): 
+class MachineCodeGen:
+    def __init__(self):
+        self.code = []
+        self.data_section = []
+        self.temp_counter = 0
+        self.label_counter = 0
+        self.reg_counter = 0
+        self.memory_offset = 0
+        self.var_locations = {}  # Maps variable names to memory addresses
+        
+    def new_temp(self):
+        t = f"t{self.temp_counter}"
+        self.temp_counter += 1
+        return t
+    
+    def new_label(self):
+        l = f"L{self.label_counter}"
+        self.label_counter += 1
+        return l
+    
+    def allocate_memory(self, var_name, size=4):
+        """Allocate memory for a variable (4 bytes for int, more for arrays)"""
+        addr = self.memory_offset
+        self.var_locations[var_name] = addr
+        self.memory_offset += size
+        return addr
+    
+    def emit(self, instruction):
+        """Add an instruction to the code"""
+        self.code.append(f"    {instruction}")
+    
+    def emit_label(self, label):
+        """Add a label"""
+        self.code.append(f"{label}:")
+    
+    def emit_comment(self, comment):
+        """Add a comment"""
+        self.code.append(f"    ; {comment}")
+
+def gen_machine_expr(expr, codegen):
+    """Generate machine code for an expression and return the result location"""
+    if isinstance(expr, NumberExpr):
+        temp = codegen.new_temp()
+        codegen.emit(f"MOV {temp}, {expr.value}")
+        return temp
+    
+    if isinstance(expr, IDExpr):
         return expr.name
+    
     if isinstance(expr, ArrayAccessExpr):
-        idx = py_expr(expr.index_expr)
-        return f"{expr.name}[{idx}]"
+        index_loc = gen_machine_expr(expr.index_expr, codegen)
+        temp = codegen.new_temp()
+        codegen.emit(f"LEA R0, [{expr.name}]")
+        codegen.emit(f"MOV R1, {index_loc}")
+        codegen.emit(f"MUL R1, 4")  # Scale by word size
+        codegen.emit(f"ADD R0, R1")
+        codegen.emit(f"LOAD {temp}, [R0]")
+        return temp
+    
     if isinstance(expr, SliceExpr):
-        start = py_expr(expr.start) if expr.start else ""
-        end = py_expr(expr.end) if expr.end else ""
-        return f"{expr.name}[{start}:{end}]"
+        temp = codegen.new_temp()
+        start_loc = gen_machine_expr(expr.start, codegen) if expr.start else "0"
+        end_loc = gen_machine_expr(expr.end, codegen) if expr.end else f"{expr.name}_len"
+        codegen.emit(f"SLICE {temp}, {expr.name}, {start_loc}, {end_loc}")
+        return temp
+    
     if isinstance(expr, BinOp):
-        left = py_expr(expr.left)
-        right = py_expr(expr.right)
-        # Map operators to helper functions for arithmetic
-        if expr.op == '+':
-            return f"_pat_add({left}, {right})"
-        elif expr.op == '-':
-            return f"_pat_sub({left}, {right})"
-        elif expr.op == '*':
-            return f"_pat_mul({left}, {right})"
-        elif expr.op == '/':
-            return f"_pat_div({left}, {right})"
-        else:
-            # Comparison operators use native Python
-            return f"({left} {expr.op} {right})"
+        left_loc = gen_machine_expr(expr.left, codegen)
+        right_loc = gen_machine_expr(expr.right, codegen)
+        temp = codegen.new_temp()
+        
+        op_map = {
+            '+': 'ADD',
+            '-': 'SUB',
+            '*': 'MUL',
+            '/': 'DIV',
+            '==': 'CMP_EQ',
+            '!=': 'CMP_NE',
+            '<': 'CMP_LT',
+            '>': 'CMP_GT',
+            '<=': 'CMP_LE',
+            '>=': 'CMP_GE'
+        }
+        
+        op_instr = op_map.get(expr.op, 'ADD')
+        codegen.emit(f"MOV R0, {left_loc}")
+        codegen.emit(f"MOV R1, {right_loc}")
+        codegen.emit(f"{op_instr} {temp}, R0, R1")
+        return temp
+    
     if isinstance(expr, PatternExpr):
-        # Generate inline pattern expression
-        return gen_pattern_inline(expr.pattern_name, expr.args)
+        return gen_pattern_machine(expr.pattern_name, expr.args, codegen)
+    
     raise Exception("Invalid expression")
 
-def gen_pattern_inline(pattern, args):
-    """Generate inline pattern expression (without assignment)."""
-    arg_values = [py_expr(a) for a in args]
+def gen_pattern_machine(pattern, args, codegen):
+    """Generate machine code for pattern generation"""
+    result_temp = codegen.new_temp()
     
-    # For complex patterns like fibonacci and factorial, we can't easily inline
-    # So we'll use simpler expressions where possible
-    
-    if pattern == "square":
-        n = arg_values[0]
-        return f"[(i+1)**2 for i in range({n})]"
-    
-    if pattern == "cube":
-        n = arg_values[0]
-        return f"[(i+1)**3 for i in range({n})]"
-    
-    if pattern == "triangular":
-        n = arg_values[0]
-        return f"[(i+1)*(i+2)//2 for i in range({n})]"
-    
-    if pattern == "arithmetic":
-        start, step, n = arg_values
-        return f"[{start} + {step}*i for i in range({n})]"
-    
-    if pattern == "geometric":
-        start, ratio, n = arg_values
-        return f"[{start}*({ratio}**i) for i in range({n})]"
-    
-    # For fibonacci and factorial, generate using a lambda with proper logic
     if pattern == "fibonacci":
-        n = arg_values[0]
-        return f"(lambda n: (lambda a, b: [(a := (b, a+b)[0], a)[1] for _ in range(n)])(0, 1) if n > 0 else [])({n})" if False else f"_fib_inline({n})"
+        n_loc = gen_machine_expr(args[0], codegen)
+        codegen.emit_comment(f"Generate Fibonacci sequence of length {n_loc}")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, 0")  # a = 0
+        codegen.emit(f"MOV R1, 1")  # b = 1
+        codegen.emit(f"MOV R2, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R2, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"STORE [{result_temp} + R2*4], R0")
+        codegen.emit(f"MOV R3, R1")
+        codegen.emit(f"ADD R3, R0")
+        codegen.emit(f"MOV R0, R1")
+        codegen.emit(f"MOV R1, R3")
+        codegen.emit(f"INC R2")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
     
-    if pattern == "factorial":
-        n = arg_values[0]
-        return f"_fact_inline({n})"
+    elif pattern == "factorial":
+        n_loc = gen_machine_expr(args[0], codegen)
+        codegen.emit_comment(f"Generate Factorial sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, 1")  # factorial result
+        codegen.emit(f"MOV R1, 1")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R1, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"MUL R0, R1")
+        codegen.emit(f"MOV R2, R1")
+        codegen.emit(f"DEC R2")
+        codegen.emit(f"STORE [{result_temp} + R2*4], R0")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
     
-    raise Exception("Unknown pattern " + pattern)
-
-def gen_pattern(name, pattern, args):
-    arg_values = [py_expr(a) for a in args]
-
-    if pattern == "fibonacci":
-        n = arg_values[0]
-        return f"""
-def _gen_{name}():
-    a,b = 0,1
-    arr=[]
-    for _ in range({n}):
-        arr.append(a)
-        a,b = b, a+b
-    return arr
-{name} = _gen_{name}()
-"""
-
-    if pattern == "factorial":
-        n = arg_values[0]
-        return f"""
-def _gen_{name}():
-    arr=[]
-    f=1
-    for i in range(1, {n}+1):
-        f*=i
-        arr.append(f)
-    return arr
-{name} = _gen_{name}()
-"""
-
-    if pattern == "square":
-        n = arg_values[0]
-        return f"""
-{name} = [(i+1)**2 for i in range({n})]
-"""
-
-    if pattern == "cube":
-        n = arg_values[0]
-        return f"""
-{name} = [(i+1)**3 for i in range({n})]
-"""
-
-    if pattern == "triangular":
-        n = arg_values[0]
-        return f"""
-{name} = [(i+1)*(i+2)//2 for i in range({n})]
-"""
-
-    if pattern == "arithmetic":
-        start, step, n = arg_values
-        return f"""
-{name} = [{start} + {step}*i for i in range({n})]
-"""
-
-    if pattern == "geometric":
-        start, ratio, n = arg_values
-        return f"""
-{name} = [{start}*({ratio}**i) for i in range({n})]
-"""
-
-    raise Exception("Unknown pattern " + pattern)
-
-
-def get_runtime_helpers():
-    return """# Runtime Helper Functions for Vector/Scalar Operations
-def _pat_add(a, b):
-    if isinstance(a, list) and isinstance(b, list):
-        return [x + y for x, y in zip(a, b)]
-    elif isinstance(a, list):
-        return [x + b for x in a]
-    elif isinstance(b, list):
-        return [a + x for x in b]
-    else:
-        return a + b
-
-def _pat_sub(a, b):
-    if isinstance(a, list) and isinstance(b, list):
-        return [x - y for x, y in zip(a, b)]
-    elif isinstance(a, list):
-        return [x - b for x in a]
-    elif isinstance(b, list):
-        return [a - x for x in b]
-    else:
-        return a - b
-
-def _pat_mul(a, b):
-    if isinstance(a, list) and isinstance(b, list):
-        return [x * y for x, y in zip(a, b)]
-    elif isinstance(a, list):
-        return [x * b for x in a]
-    elif isinstance(b, list):
-        return [a * x for x in b]
-    else:
-        return a * b
-
-def _pat_div(a, b):
-    if isinstance(a, list) and isinstance(b, list):
-        return [x // y for x, y in zip(a, b)]
-    elif isinstance(a, list):
-        return [x // b for x in a]
-    elif isinstance(b, list):
-        return [a // x for x in b]
-    else:
-        return a // b
-
-def _fib_inline(n):
-    a, b = 0, 1
-    arr = []
-    for _ in range(n):
-        arr.append(a)
-        a, b = b, a + b
-    return arr
-
-def _fact_inline(n):
-    arr = []
-    f = 1
-    for i in range(1, n+1):
-        f *= i
-        arr.append(f)
-    return arr
-"""
-
-def generate_python(ast):
-    code = ["# Generated Python Code"]
-    code.append(get_runtime_helpers())
+    elif pattern == "square":
+        n_loc = gen_machine_expr(args[0], codegen)
+        codegen.emit_comment(f"Generate Square sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R0, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"MOV R1, R0")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"MUL R1, R1")
+        codegen.emit(f"STORE [{result_temp} + R0*4], R1")
+        codegen.emit(f"INC R0")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
     
+    elif pattern == "cube":
+        n_loc = gen_machine_expr(args[0], codegen)
+        codegen.emit_comment(f"Generate Cube sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R0, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"MOV R1, R0")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"MOV R2, R1")
+        codegen.emit(f"MUL R1, R2")
+        codegen.emit(f"MUL R1, R2")
+        codegen.emit(f"STORE [{result_temp} + R0*4], R1")
+        codegen.emit(f"INC R0")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
+    
+    elif pattern == "triangular":
+        n_loc = gen_machine_expr(args[0], codegen)
+        codegen.emit_comment(f"Generate Triangular sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R0, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"MOV R1, R0")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"MOV R2, R1")
+        codegen.emit(f"INC R2")
+        codegen.emit(f"MUL R1, R2")
+        codegen.emit(f"DIV R1, 2")
+        codegen.emit(f"STORE [{result_temp} + R0*4], R1")
+        codegen.emit(f"INC R0")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
+    
+    elif pattern == "arithmetic":
+        start_loc = gen_machine_expr(args[0], codegen)
+        step_loc = gen_machine_expr(args[1], codegen)
+        n_loc = gen_machine_expr(args[2], codegen)
+        codegen.emit_comment(f"Generate Arithmetic sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, {start_loc}")  # current value
+        codegen.emit(f"MOV R1, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R1, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"STORE [{result_temp} + R1*4], R0")
+        codegen.emit(f"ADD R0, {step_loc}")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
+    
+    elif pattern == "geometric":
+        start_loc = gen_machine_expr(args[0], codegen)
+        ratio_loc = gen_machine_expr(args[1], codegen)
+        n_loc = gen_machine_expr(args[2], codegen)
+        codegen.emit_comment(f"Generate Geometric sequence")
+        codegen.emit(f"ALLOC_ARRAY {result_temp}, {n_loc}")
+        codegen.emit(f"MOV R0, {start_loc}")  # current value
+        codegen.emit(f"MOV R1, 0")  # counter
+        loop_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit_label(loop_label)
+        codegen.emit(f"CMP R1, {n_loc}")
+        codegen.emit(f"JGE {end_label}")
+        codegen.emit(f"STORE [{result_temp} + R1*4], R0")
+        codegen.emit(f"MUL R0, {ratio_loc}")
+        codegen.emit(f"INC R1")
+        codegen.emit(f"JMP {loop_label}")
+        codegen.emit_label(end_label)
+        return result_temp
+    
+    else:
+        raise Exception("Unknown pattern " + pattern)
+
+def generate_machine_code(ast):
+    """Generate machine code (assembly-like) from AST"""
+    codegen = MachineCodeGen()
+    
+    # Header
+    codegen.code.append("; Generated Machine Code for Sequentia")
+    codegen.code.append("; Architecture: Generic Assembly")
+    codegen.code.append("")
+    codegen.code.append(".data")
+    codegen.code.append("    ; Data section for variables")
+    codegen.code.append("")
+    codegen.code.append(".text")
+    codegen.code.append(".global _start")
+    codegen.code.append("")
+    codegen.code.append("_start:")
+    
+    # Generate code for each statement
     for stmt in ast.stmts:
-        code.extend(gen_stmt(stmt, 0))
+        gen_stmt_machine(stmt, codegen)
+    
+    # Exit program
+    codegen.emit("")
+    codegen.emit_comment("Exit program")
+    codegen.emit("MOV R0, 0")
+    codegen.emit("SYSCALL EXIT")
+    
+    return "\n".join(codegen.code)
 
-    return "\n".join(code)
-
-def gen_stmt(stmt, indent_level):
-    """Generate Python code for a statement with proper indentation."""
-    indent = "    " * indent_level
-    code = []
+def gen_stmt_machine(stmt, codegen):
+    """Generate machine code for a statement"""
     
     if isinstance(stmt, Assign):
-        if isinstance(stmt.expr, PatternExpr):
-            # pattern expression
-            p = stmt.expr
-            pattern_code = gen_pattern(stmt.name, p.pattern_name, p.args)
-            # Add indentation to each line
-            for line in pattern_code.strip().split('\n'):
-                if line.strip():
-                    code.append(indent + line)
-        else:
-            # All other assignments
-            code.append(f"{indent}{stmt.name} = {py_expr(stmt.expr)}")
+        codegen.emit_comment(f"Assignment: {stmt.name} = ...")
+        
+        # Allocate memory for the variable
+        if stmt.name not in codegen.var_locations:
+            codegen.allocate_memory(stmt.name, 4)
+        
+        # Generate code for the expression
+        result_loc = gen_machine_expr(stmt.expr, codegen)
+        
+        # Store the result
+        codegen.emit(f"MOV {stmt.name}, {result_loc}")
+        codegen.emit("")
     
     elif isinstance(stmt, Print):
+        codegen.emit_comment(f"Print statement")
+        
         if stmt.name == "_expr_":
-            # Print any expression
-            expr_code = py_expr(stmt.index_expr)
-            code.append(f"{indent}print({expr_code} if isinstance({expr_code}, int) else ' '.join(str(x) for x in {expr_code}))")
+            expr_loc = gen_machine_expr(stmt.index_expr, codegen)
+            codegen.emit(f"PRINT {expr_loc}")
         elif stmt.index_expr:
-            code.append(f"{indent}print({stmt.name}[{py_expr(stmt.index_expr)}])")
+            index_loc = gen_machine_expr(stmt.index_expr, codegen)
+            temp = codegen.new_temp()
+            codegen.emit(f"LEA R0, [{stmt.name}]")
+            codegen.emit(f"MOV R1, {index_loc}")
+            codegen.emit(f"MUL R1, 4")
+            codegen.emit(f"ADD R0, R1")
+            codegen.emit(f"LOAD {temp}, [R0]")
+            codegen.emit(f"PRINT {temp}")
         else:
-            code.append(f"{indent}print({stmt.name} if isinstance({stmt.name}, int) else ' '.join(str(x) for x in {stmt.name}))")
+            codegen.emit(f"PRINT {stmt.name}")
+        codegen.emit("")
     
     elif isinstance(stmt, IfStmt):
-        condition = py_expr(stmt.condition)
-        code.append(f"{indent}if {condition}:")
-        
+        codegen.emit_comment("If statement")
+        cond_loc = gen_machine_expr(stmt.condition, codegen)
+        false_label = codegen.new_label()
+        end_label = codegen.new_label()
+        codegen.emit(f"CMP {cond_loc}, 0")
+        codegen.emit(f"JE {false_label}")
         for s in stmt.true_block:
-            code.extend(gen_stmt(s, indent_level + 1))
-        
+            gen_stmt_machine(s, codegen)
         if stmt.false_block:
-            code.append(f"{indent}else:")
+            codegen.emit(f"JMP {end_label}")
+            codegen.emit_label(false_label)
             for s in stmt.false_block:
-                code.extend(gen_stmt(s, indent_level + 1))
+                gen_stmt_machine(s, codegen)
+            codegen.emit_label(end_label)
+        else:
+            codegen.emit_label(false_label)
+        codegen.emit("")
     
     elif isinstance(stmt, ForStmt):
-        if isinstance(stmt.source, str):
-            source_code = stmt.source
-        else:
-            source_code = py_expr(stmt.source)
-        
-        code.append(f"{indent}for {stmt.iterator} in {source_code}:")
-        
+        codegen.emit_comment(f"For loop: {stmt.iterator} in {stmt.source}")
+        source_var = stmt.source if isinstance(stmt.source, str) else gen_machine_expr(stmt.source, codegen)
+        if stmt.iterator not in codegen.var_locations:
+            codegen.allocate_memory(stmt.iterator, 4)
+        counter = codegen.new_temp()
+        length = codegen.new_temp()
+        codegen.emit(f"MOV {counter}, 0")
+        codegen.emit(f"GET_LENGTH {length}, {source_var}")
+        loop_start = codegen.new_label()
+        loop_end = codegen.new_label()
+        codegen.emit_label(loop_start)
+        codegen.emit(f"CMP {counter}, {length}")
+        codegen.emit(f"JGE {loop_end}")
+        codegen.emit(f"LEA R0, [{source_var}]")
+        codegen.emit(f"MOV R1, {counter}")
+        codegen.emit(f"MUL R1, 4")
+        codegen.emit(f"ADD R0, R1")
+        codegen.emit(f"LOAD {stmt.iterator}, [R0]")
         for s in stmt.body:
-            code.extend(gen_stmt(s, indent_level + 1))
-    
-    return code
+            gen_stmt_machine(s, codegen)
+        codegen.emit(f"INC {counter}")
+        codegen.emit(f"JMP {loop_start}")
+        codegen.emit_label(loop_end)
+        codegen.emit("")
 
 
 # --------------------------
 # Compiler Driver
 # --------------------------
 
-def compile_and_run(src):
+def compile_and_generate(src):
+    """Compile source code and generate machine code"""
     tokens = Lexer(src).tokens()
     ast = Parser(tokens).parse_program()
     SemanticAnalyzer(ast).check()
-    py = generate_python(ast)
-
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        exec(py, {})
-    return py, buf.getvalue()
+    machine_code = generate_machine_code(ast)
+    return machine_code
 
 # --------------------------
 # CLI / REPL
@@ -961,11 +1060,9 @@ def repl():
                     continue
                 source = '\n'.join(lines) + '\n'
                 try:
-                    py, out = compile_and_run(source)
-                    print('--- Generated Python ---')
-                    print(py)
-                    print('--- Output ---')
-                    print(out, end='')
+                    machine_code = compile_and_generate(source)
+                    print('--- Generated Machine Code ---')
+                    print(machine_code)
                 except Exception as e:
                     print('Error:', e)
                 lines = []
@@ -978,17 +1075,21 @@ def run_file(path: str):
     with open(path, 'r') as f:
         src = f.read()
     try:
-        py, out = compile_and_run(src)
+        machine_code = compile_and_generate(src)
     except Exception as e:
-        print('Compilation / execution error:')
+        print('Compilation error:')
         print(str(e))
         import traceback
         traceback.print_exc()
         return
-    print('--- Generated Python ---')
-    print(py)
-    print('--- Program Output ---')
-    print(out, end='')
+    print('--- Generated Machine Code ---')
+    print(machine_code)
+    
+    # Save to .asm file
+    output_path = path.rsplit('.', 1)[0] + '.asm'
+    with open(output_path, 'w') as f:
+        f.write(machine_code)
+    print(f'\n--- Machine code saved to {output_path} ---')
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:

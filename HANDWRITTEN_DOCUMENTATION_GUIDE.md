@@ -480,22 +480,216 @@ s = shift, r = reduce, acc = accept
 
 ```
 CLR(1) Items (with lookaheads):
-─────────────────────────────────────
-I0: [E' → •E, $]
-    [E → •E + T, +/$]
-    [E → •T, +/$]
-    [T → •T * F, +/*/$ ]
-    [T → •F, +/*/$ ]
-    [F → •( E ), +/*/$ ]
-    [F → •id, +/*/$ ]
+─────────────────────────────────────────────────────────────
 
-I1: [E' → E•, $]
-    [E → E• + T, +/$]
+Simplified Grammar for demonstration:
+E' → E
+E → E + T
+E → T
+T → T * F
+T → F
+F → ( E )
+F → id
 
-I2: [E → T•, +/$]
-    [T → T• * F, +/*/$ ]
+CLR(1) Construction Steps:
+═════════════════════════════════════════════════════════════
 
-(Continue for all states with lookaheads...)
+State I0 (Initial State):
+─────────────────────────────────────────────────────────────
+[E' → •E, $]
+[E → •E + T, +/$]      (from closure, FIRST(+) = {+}, FOLLOW(E') = {$})
+[E → •T, +/$]          (from closure)
+[T → •T * F, +/*/$]    (from closure, FIRST(+/$) = {+, $, *})
+[T → •F, +/*/$]        (from closure)
+[F → •( E ), +/*/$]    (from closure)
+[F → •id, +/*/$]       (from closure)
+
+Transitions from I0:
+  - E → I1
+  - T → I2
+  - F → I3
+  - ( → I4
+  - id → I5
+
+State I1:
+─────────────────────────────────────────────────────────────
+[E' → E•, $]
+[E → E• + T, +/$]
+
+Transitions from I1:
+  - $ → ACCEPT
+  - + → I6
+
+State I2:
+─────────────────────────────────────────────────────────────
+[E → T•, +/$]
+[T → T• * F, +/*/$]
+
+Transitions from I2:
+  - Reduce E → T on {+, $}
+  - * → I7
+
+State I3:
+─────────────────────────────────────────────────────────────
+[T → F•, +/*/$]
+
+Transitions from I3:
+  - Reduce T → F on {+, *, $}
+
+State I4:
+─────────────────────────────────────────────────────────────
+[F → ( •E ), +/*/$]
+[E → •E + T, +/)]      (FOLLOW changes inside parens)
+[E → •T, +/)]
+[T → •T * F, +/*/)]    
+[T → •F, +/*/)]
+[F → •( E ), +/*/)]
+[F → •id, +/*/)]
+
+Transitions from I4:
+  - E → I8
+  - T → I9 (different from I2 due to lookaheads)
+  - F → I10 (different from I3 due to lookaheads)
+  - ( → I4 (recursive)
+  - id → I11 (different from I5 due to lookaheads)
+
+State I5:
+─────────────────────────────────────────────────────────────
+[F → id•, +/*/$]
+
+Transitions from I5:
+  - Reduce F → id on {+, *, $}
+
+State I6:
+─────────────────────────────────────────────────────────────
+[E → E + •T, +/$]
+[T → •T * F, +/*/$]
+[T → •F, +/*/$]
+[F → •( E ), +/*/$]
+[F → •id, +/*/$]
+
+Transitions from I6:
+  - T → I12
+  - F → I3 (same as before)
+  - ( → I4 (same as before)
+  - id → I5 (same as before)
+
+State I7:
+─────────────────────────────────────────────────────────────
+[T → T * •F, +/*/$]
+[F → •( E ), +/*/$]
+[F → •id, +/*/$]
+
+Transitions from I7:
+  - F → I13
+  - ( → I4
+  - id → I5
+
+State I8:
+─────────────────────────────────────────────────────────────
+[F → ( E• ), +/*/$]
+[E → E• + T, +/)]
+
+Transitions from I8:
+  - ) → I14
+  - + → I15 (different from I6 due to lookaheads)
+
+State I9:
+─────────────────────────────────────────────────────────────
+[E → T•, +/)]
+[T → T• * F, +/*/)]
+
+Transitions from I9:
+  - Reduce E → T on {+, )}
+  - * → I16 (different from I7 due to lookaheads)
+
+State I10:
+─────────────────────────────────────────────────────────────
+[T → F•, +/*/)]
+
+Transitions from I10:
+  - Reduce T → F on {+, *, )}
+
+State I11:
+─────────────────────────────────────────────────────────────
+[F → id•, +/*/)]
+
+Transitions from I11:
+  - Reduce F → id on {+, *, )}
+
+State I12:
+─────────────────────────────────────────────────────────────
+[E → E + T•, +/$]
+[T → T• * F, +/*/$]
+
+Transitions from I12:
+  - Reduce E → E + T on {+, $}
+  - * → I7
+
+State I13:
+─────────────────────────────────────────────────────────────
+[T → T * F•, +/*/$]
+
+Transitions from I13:
+  - Reduce T → T * F on {+, *, $}
+
+State I14:
+─────────────────────────────────────────────────────────────
+[F → ( E )•, +/*/$]
+
+Transitions from I14:
+  - Reduce F → ( E ) on {+, *, $}
+
+State I15:
+─────────────────────────────────────────────────────────────
+[E → E + •T, +/)]
+[T → •T * F, +/*/)]
+[T → •F, +/*/)]
+[F → •( E ), +/*/)]
+[F → •id, +/*/)]
+
+Transitions from I15:
+  - T → I17
+  - F → I10
+  - ( → I4
+  - id → I11
+
+State I16:
+─────────────────────────────────────────────────────────────
+[T → T * •F, +/*/)]
+[F → •( E ), +/*/)]
+[F → •id, +/*/)]
+
+Transitions from I16:
+  - F → I18
+  - ( → I4
+  - id → I11
+
+State I17:
+─────────────────────────────────────────────────────────────
+[E → E + T•, +/)]
+[T → T• * F, +/*/)]
+
+Transitions from I17:
+  - Reduce E → E + T on {+, )}
+  - * → I16
+
+State I18:
+─────────────────────────────────────────────────────────────
+[T → T * F•, +/*/)]
+
+Transitions from I18:
+  - Reduce T → T * F on {+, *, )}
+
+═════════════════════════════════════════════════════════════
+Total CLR(1) States: 19
+
+Key Observation:
+CLR(1) creates separate states for items that differ only in
+lookaheads (e.g., I2/I9, I3/I10, I5/I11, I6/I15, I7/I16, I13/I18).
+This eliminates all reduce-reduce conflicts but increases the
+number of states significantly.
+═════════════════════════════════════════════════════════════
 ```
 
 #### 3.4.4 LALR(1) Construction
@@ -504,18 +698,155 @@ I2: [E → T•, +/$]
 
 ```
 LALR(1) State Merging:
-──────────────────────────────────────
-Merge CLR(1) states with same core:
+═════════════════════════════════════════════════════════════
 
-CLR States → LALR States
-I0 → I0 (no merge)
-I1 → I1 (no merge)
-I2, I2' → I2 (merged - same core, different lookaheads)
-I3, I3' → I3 (merged)
-...
+Step 1: Identify CLR(1) states with identical cores
+─────────────────────────────────────────────────────────────
+Core: The LR(0) part of an item (ignoring lookaheads)
 
-LALR(1) has fewer states than CLR(1) 
-but more powerful than SLR(1)
+States with same core:
+  Group A: I2 and I9 (both have core: E → T•, T → T • * F)
+  Group B: I3 and I10 (both have core: T → F•)
+  Group C: I5 and I11 (both have core: F → id•)
+  Group D: I6 and I15 (both have core: E → E + •T, ...)
+  Group E: I7 and I16 (both have core: T → T * •F, ...)
+  Group F: I13 and I18 (both have core: T → T * F•)
+
+All other states have unique cores.
+
+Step 2: Merge states by combining lookaheads
+─────────────────────────────────────────────────────────────
+
+Merge I2 and I9 → New state I2':
+  [E → T•, +/$/)]              (combined lookaheads)
+  [T → T• * F, +/*/$/)]        (combined lookaheads)
+
+Merge I3 and I10 → New state I3':
+  [T → F•, +/*/$/)]            (combined lookaheads)
+
+Merge I5 and I11 → New state I5':
+  [F → id•, +/*/$/)]           (combined lookaheads)
+
+Merge I6 and I15 → New state I6':
+  [E → E + •T, +/$/)]
+  [T → •T * F, +/*/$/)]        
+  [T → •F, +/*/$/)]            
+  [F → •( E ), +/*/$/)]        
+  [F → •id, +/*/$/)]           
+
+Merge I7 and I16 → New state I7':
+  [T → T * •F, +/*/$/)]        
+  [F → •( E ), +/*/$/)]        
+  [F → •id, +/*/$/)]           
+
+Merge I13 and I18 → New state I13':
+  [T → T * F•, +/*/$/)]        (combined lookaheads)
+
+Step 3: Final LALR(1) State Set
+─────────────────────────────────────────────────────────────
+LALR(1) States (after merging):
+
+I0:  [E' → •E, $] + closure
+I1:  [E' → E•, $], [E → E• + T, +/$]
+I2': [E → T•, +/$/)] [T → T• * F, +/*/$/)]     ← merged
+I3': [T → F•, +/*/$/)]                          ← merged
+I4:  [F → ( •E ), +/*/$] + closure
+I5': [F → id•, +/*/$/)]                         ← merged
+I6': [E → E + •T, +/$/)] + closure              ← merged
+I7': [T → T * •F, +/*/$/)] + closure            ← merged
+I8:  [F → ( E• ), +/*/$], [E → E• + T, +/)]
+I12: [E → E + T•, +/$], [T → T• * F, +/*/$]
+I13':[T → T * F•, +/*/$/)]                      ← merged
+I14: [F → ( E )•, +/*/$]
+I17: [E → E + T•, +/)], [T → T• * F, +/*/)] 
+
+═════════════════════════════════════════════════════════════
+State Count Comparison:
+  LR(0):    11 states  (no lookaheads)
+  SLR(1):   11 states  (uses FOLLOW sets)
+  CLR(1):   19 states  (separate states for different lookaheads)
+  LALR(1):  13 states  (merged CLR(1) states with same core)
+
+Advantages of LALR(1):
+  ✓ Fewer states than CLR(1) (more efficient)
+  ✓ More powerful than SLR(1) (fewer conflicts)
+  ✓ Most programming languages use LALR(1)
+  ✓ Used by tools like Yacc/Bison
+
+Potential Issue:
+  ⚠ May introduce reduce-reduce conflicts that CLR(1) doesn't have
+    (rare in practice)
+═════════════════════════════════════════════════════════════
+
+Step 4: LALR(1) Parsing Table
+─────────────────────────────────────────────────────────────
+
+LALR(1) Parsing Table:
+════════════════════════════════════════════════════════════════
+State │ id  │  +  │  *  │  (  │  )  │  $  │  E  │  T  │  F  │
+──────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
+  0   │ s5' │     │     │ s4  │     │     │  1  │  2' │  3' │
+  1   │     │ s6' │     │     │     │ acc │     │     │     │
+  2'  │     │ r2  │ s7' │     │ r2  │ r2  │     │     │     │
+  3'  │     │ r4  │ r4  │     │ r4  │ r4  │     │     │     │
+  4   │ s5' │     │     │ s4  │     │     │  8  │  2' │  3' │
+  5'  │     │ r6  │ r6  │     │ r6  │ r6  │     │     │     │
+  6'  │ s5' │     │     │ s4  │     │     │     │ 12  │  3' │
+  7'  │ s5' │     │     │ s4  │     │     │     │     │ 13' │
+  8   │     │ s6' │     │     │ s17 │     │     │     │     │
+  12  │     │ r1  │ s7' │     │     │ r1  │     │     │     │
+  13' │     │ r3  │ r3  │     │ r3  │ r3  │     │     │     │
+  14  │     │ r5  │ r5  │     │ r5  │ r5  │     │     │     │
+  17  │     │ r1  │ s7' │     │ r1  │     │     │     │     │
+════════════════════════════════════════════════════════════════
+
+Actions:
+  s = shift, r = reduce, acc = accept
+  Numbers after 's' indicate next state
+  Numbers after 'r' indicate production number:
+    r1: E → E + T
+    r2: E → T
+    r3: T → T * F
+    r4: T → F
+    r5: F → ( E )
+    r6: F → id
+
+Step 5: Example Parse - Input: id + id * id
+─────────────────────────────────────────────────────────────
+
+Bottom-Up Parse using LALR(1):
+════════════════════════════════════════════════════════════════
+Step │ Stack              │ Input         │ Action
+─────┼────────────────────┼───────────────┼─────────────────────
+  1  │ 0                  │ id + id * id$ │ shift 5'
+  2  │ 0 id 5'            │ + id * id$    │ reduce F → id
+  3  │ 0 F 3'             │ + id * id$    │ reduce T → F
+  4  │ 0 T 2'             │ + id * id$    │ reduce E → T
+  5  │ 0 E 1              │ + id * id$    │ shift 6'
+  6  │ 0 E 1 + 6'         │ id * id$      │ shift 5'
+  7  │ 0 E 1 + 6' id 5'   │ * id$         │ reduce F → id
+  8  │ 0 E 1 + 6' F 3'    │ * id$         │ reduce T → F
+  9  │ 0 E 1 + 6' T 12    │ * id$         │ shift 7'
+ 10  │ 0 E 1 + 6' T 12 * 7'│ id$          │ shift 5'
+ 11  │ ... * 7' id 5'     │ $             │ reduce F → id
+ 12  │ ... * 7' F 13'     │ $             │ reduce T → T * F
+ 13  │ 0 E 1 + 6' T 12    │ $             │ reduce E → E + T
+ 14  │ 0 E 1              │ $             │ accept
+════════════════════════════════════════════════════════════════
+
+Parse Tree:
+                    E
+                /   |   \
+               E    +    T
+               |       / | \
+               T      T  *  F
+               |      |     |
+               F      F    id
+               |      |
+              id     id
+
+Result: Successfully parsed with LALR(1)
+═════════════════════════════════════════════════════════════
 ```
 
 #### 3.4.5 Parse Example with Bottom-Up

@@ -3948,6 +3948,401 @@ Explanation:
 - Saves one addition operation
 ```
 
+### 7.5 Sequentia-Specific Optimizations
+
+#### Example 4: Pattern Constant Propagation
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+n = 5
+arr = pattern fibonacci n
+print arr
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  n = 5
+2:  arr = PATTERN fibonacci(n)
+3:  PRINT arr
+─────────────────────────────────────────────────────────
+
+After Pattern Constant Propagation:
+═══════════════════════════════════════════════════════════
+1:  arr = CONSTANT_ARRAY [0, 1, 1, 2, 3]
+2:  PRINT arr
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Pattern computed at compile-time instead of runtime
+- No loop execution needed
+- Direct array allocation with known values
+- Eliminates PATTERN instruction overhead
+- 100+ instructions reduced to 1 assignment
+```
+
+#### Example 5: Pattern Strength Reduction
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+x = pattern square 100
+y = pattern square 100
+z = x + y
+print z
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  x = PATTERN square(100)
+2:  y = PATTERN square(100)
+3:  z = x + y
+4:  PRINT z
+─────────────────────────────────────────────────────────
+
+After Pattern Strength Reduction:
+═══════════════════════════════════════════════════════════
+1:  x = PATTERN square(100)
+2:  y = x                    ; Reuse computed pattern
+3:  z = x + y
+4:  PRINT z
+═══════════════════════════════════════════════════════════
+
+Alternative: Pattern Fusion
+═══════════════════════════════════════════════════════════
+1:  temp = PATTERN square(100)
+2:  z = temp * 2             ; Fuse addition with scalar multiply
+3:  PRINT z
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Identical pattern computed only once
+- 100 iterations reduced to 0 for second pattern
+- Memory reuse for identical results
+- Pattern fusion: x + x → x * 2 (simpler operation)
+```
+
+#### Example 6: Vector Operation Fusion
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+arr = pattern arithmetic 0, 1, 10
+doubled = arr * 2
+tripled = doubled + arr
+print tripled
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  arr = PATTERN arithmetic(0, 1, 10)
+2:  t1 = 0
+3:  t2 = LENGTH arr
+4:  LABEL L1:
+5:  t3 = t1 < t2
+6:  IF_FALSE t3 GOTO L2
+7:  t4 = arr[t1]
+8:  t5 = t4 * 2
+9:  doubled[t1] = t5
+10: t1 = t1 + 1
+11: GOTO L1
+12: LABEL L2:
+13: t6 = 0
+14: t7 = LENGTH doubled
+15: LABEL L3:
+16: t8 = t6 < t7
+17: IF_FALSE t8 GOTO L4
+18: t9 = doubled[t6]
+19: t10 = arr[t6]
+20: t11 = t9 + t10
+21: tripled[t6] = t11
+22: t6 = t6 + 1
+23: GOTO L3
+24: LABEL L4:
+25: PRINT tripled
+─────────────────────────────────────────────────────────
+
+After Vector Operation Fusion:
+═══════════════════════════════════════════════════════════
+1:  arr = PATTERN arithmetic(0, 1, 10)
+2:  t1 = 0
+3:  t2 = LENGTH arr
+4:  LABEL L1:
+5:  t3 = t1 < t2
+6:  IF_FALSE t3 GOTO L2
+7:  t4 = arr[t1]
+8:  t5 = t4 * 3            ; Fused: (t4 * 2) + t4 = t4 * 3
+9:  tripled[t1] = t5
+10: t1 = t1 + 1
+11: GOTO L1
+12: LABEL L2:
+13: PRINT tripled
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Two loops fused into one
+- 25 instructions reduced to 13
+- Single pass over data instead of two
+- Better cache locality
+- Algebraic simplification: (arr * 2) + arr = arr * 3
+```
+
+#### Example 7: Pattern Slicing Elimination
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+full = pattern fibonacci 10
+slice = full[3:7]
+print slice
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  full = PATTERN fibonacci(10)
+2:  slice = full[3:7]
+3:  PRINT slice
+─────────────────────────────────────────────────────────
+
+After Pattern Slicing Elimination:
+═══════════════════════════════════════════════════════════
+1:  slice = PATTERN_SLICE fibonacci(10, 3, 7)
+2:  PRINT slice
+═══════════════════════════════════════════════════════════
+
+Machine Code Optimization:
+═══════════════════════════════════════════════════════════
+; Instead of generating full array then copying slice:
+; Generate only the needed elements [3:7] = [2, 3, 5, 8]
+
+MOV R0, 0                    ; a = 0
+MOV R1, 1                    ; b = 1
+MOV R2, 0                    ; counter = 0
+
+; Skip first 3 elements
+SKIP_LOOP:
+    CMP R2, 3
+    JGE GEN_LOOP
+    MOV R3, R1
+    ADD R3, R0
+    MOV R0, R1
+    MOV R1, R3
+    INC R2
+    JMP SKIP_LOOP
+
+; Generate only elements 3-6 (4 elements)
+GEN_LOOP:
+    CMP R2, 7
+    JGE END
+    STORE [slice + (R2-3)*4], R0
+    MOV R3, R1
+    ADD R3, R0
+    MOV R0, R1
+    MOV R1, R3
+    INC R2
+    JMP GEN_LOOP
+END:
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Generate only needed elements (4 instead of 10)
+- No full array allocation
+- No slice copy operation
+- 60% less memory usage
+- 60% fewer loop iterations
+```
+
+#### Example 8: Loop Unrolling for Pattern Access
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+arr = pattern square 4
+for i in arr {
+    print i
+}
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  arr = PATTERN square(4)
+2:  t1 = 0
+3:  t2 = LENGTH arr
+4:  LABEL L1:
+5:  t3 = t1 < t2
+6:  IF_FALSE t3 GOTO L2
+7:  i = arr[t1]
+8:  PRINT i
+9:  t1 = t1 + 1
+10: GOTO L1
+11: LABEL L2:
+─────────────────────────────────────────────────────────
+
+After Loop Unrolling (Pattern Known at Compile-Time):
+═══════════════════════════════════════════════════════════
+1:  arr = CONSTANT_ARRAY [1, 4, 9, 16]
+2:  PRINT 1
+3:  PRINT 4
+4:  PRINT 9
+5:  PRINT 16
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Loop completely eliminated
+- No branch instructions
+- No counter maintenance
+- No array access overhead
+- 11 instructions reduced to 5
+- Pattern computation done at compile-time
+```
+
+#### Example 9: Pattern Chain Optimization
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+base = pattern arithmetic 1, 1, 5
+squares = base * base
+cubes = squares * base
+print cubes
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  base = PATTERN arithmetic(1, 1, 5)
+2:  squares = base * base
+3:  cubes = squares * base
+4:  PRINT cubes
+─────────────────────────────────────────────────────────
+
+After Pattern Chain Optimization:
+═══════════════════════════════════════════════════════════
+1:  cubes = PATTERN cube(5)
+2:  PRINT cubes
+═══════════════════════════════════════════════════════════
+
+Optimization Recognition:
+- base = [1, 2, 3, 4, 5]
+- squares = base * base = [1, 4, 9, 16, 25]
+- cubes = squares * base = [1, 8, 27, 64, 125]
+- Recognize pattern: arithmetic(1,1,n) * arithmetic(1,1,n) * arithmetic(1,1,n) = cube(n)
+- Replace chain with direct cube pattern
+
+Optimization Benefits:
+- Three operations reduced to one
+- Direct pattern recognition
+- Optimal algorithm for cube generation
+- Eliminates intermediate arrays (squares, base)
+```
+
+#### Example 10: Redundant Pattern Elimination in Loops
+
+```
+Source Code:
+─────────────────────────────────────────────────────────
+for i in [1, 2, 3] {
+    arr = pattern fibonacci 5
+    print arr[i]
+}
+─────────────────────────────────────────────────────────
+
+Before Optimization (TAC):
+─────────────────────────────────────────────────────────
+1:  temp_iter = [1, 2, 3]
+2:  t1 = 0
+3:  t2 = LENGTH temp_iter
+4:  LABEL L1:
+5:  t3 = t1 < t2
+6:  IF_FALSE t3 GOTO L2
+7:  i = temp_iter[t1]
+8:  arr = PATTERN fibonacci(5)    ; Computed every iteration!
+9:  t4 = arr[i]
+10: PRINT t4
+11: t1 = t1 + 1
+12: GOTO L1
+13: LABEL L2:
+─────────────────────────────────────────────────────────
+
+After Loop-Invariant Pattern Hoisting:
+═══════════════════════════════════════════════════════════
+1:  temp_iter = [1, 2, 3]
+2:  arr = PATTERN fibonacci(5)    ; Hoisted outside loop
+3:  t1 = 0
+4:  t2 = LENGTH temp_iter
+5:  LABEL L1:
+6:  t3 = t1 < t2
+7:  IF_FALSE t3 GOTO L2
+8:  i = temp_iter[t1]
+9:  t4 = arr[i]
+10: PRINT t4
+11: t1 = t1 + 1
+12: GOTO L1
+13: LABEL L2:
+═══════════════════════════════════════════════════════════
+
+Optimization Benefits:
+- Pattern generated once, not 3 times
+- Loop-invariant code motion
+- Pattern result reused across iterations
+- 200+ instructions saved (3 pattern generations eliminated)
+- Significant performance improvement
+```
+
+### 7.6 Sequentia Optimization Summary
+
+```
+Optimization Techniques Applied to Sequentia:
+═══════════════════════════════════════════════════════════
+Technique                    │ Impact          │ Complexity
+─────────────────────────────┼─────────────────┼────────────
+Pattern Constant Propagation │ Very High       │ Low
+Pattern Strength Reduction   │ High            │ Medium
+Vector Operation Fusion      │ High            │ Medium
+Pattern Slicing Elimination  │ Medium          │ High
+Loop Unrolling              │ Medium-High     │ Low
+Pattern Chain Optimization   │ Very High       │ High
+Loop-Invariant Hoisting     │ High            │ Medium
+═══════════════════════════════════════════════════════════
+
+When to Apply Each Optimization:
+─────────────────────────────────────────────────────────
+Constant Propagation:
+  ✓ Pattern size known at compile-time
+  ✓ Pattern parameters are constants
+  ✓ Pattern small enough to embed
+
+Strength Reduction:
+  ✓ Same pattern used multiple times
+  ✓ Pattern computation is expensive
+  ✓ Results can be cached
+
+Vector Fusion:
+  ✓ Multiple passes over same data
+  ✓ Operations can be combined algebraically
+  ✓ Intermediate results not needed
+
+Pattern Slicing:
+  ✓ Only subset of pattern needed
+  ✓ Pattern generation is expensive
+  ✓ Slice bounds known at compile-time
+
+Loop Unrolling:
+  ✓ Small, fixed iteration count
+  ✓ Pattern known at compile-time
+  ✓ Code size acceptable
+
+Pattern Chain:
+  ✓ Series of operations matches known pattern
+  ✓ Direct pattern more efficient
+  ✓ Pattern recognizable through analysis
+
+Loop-Invariant Hoisting:
+  ✓ Pattern doesn't depend on loop variable
+  ✓ Pattern parameters constant in loop
+  ✓ Safe to compute before loop
+═══════════════════════════════════════════════════════════
+```
+
 ---
 
 # 8. MACHINE CODE GENERATION

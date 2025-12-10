@@ -1,0 +1,4 @@
+a = 5 + 3        # Constant arithmetic
+b = 10 * 2       # More constants
+unused = 99      # Dead code
+print a

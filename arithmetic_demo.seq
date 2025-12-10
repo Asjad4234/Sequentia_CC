@@ -12,10 +12,3 @@ print evens
 # Example 3: Counting by 10s
 tens = pattern arithmetic 10, 10, 5
 print tens
-
-# Example 4: Using variables
-n = 7
-start_val = 100
-step_val = 15
-custom = pattern arithmetic start_val, step_val, n
-print custom[2]

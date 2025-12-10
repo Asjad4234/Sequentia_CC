@@ -1,5 +1,0 @@
-n = 3
-x = pattern square 5
-y = x
-print y
-print y[2]
